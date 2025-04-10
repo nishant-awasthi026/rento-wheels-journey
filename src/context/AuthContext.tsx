@@ -1,6 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "@/utils/api";
+import { useToast } from "@/hooks/use-toast";
 
 type User = {
   id: string;
@@ -37,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   // Check for stored auth on mount
   useEffect(() => {
@@ -44,8 +47,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const storedToken = localStorage.getItem("rento-token");
     
     if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-      setToken(storedToken);
+      try {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+      } catch (e) {
+        // If parsing fails, clear storage
+        localStorage.removeItem("rento-user");
+        localStorage.removeItem("rento-token");
+        toast({
+          title: "Session Error",
+          description: "Your session was invalid. Please login again.",
+          variant: "destructive",
+        });
+      }
     }
     
     setLoading(false);
@@ -55,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:5000/api/login", {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,6 +88,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       localStorage.setItem("rento-user", JSON.stringify(data.user));
       localStorage.setItem("rento-token", data.token);
       
+      toast({
+        title: "Login Successful",
+        description: `Welcome back, ${data.user.name}!`,
+      });
+      
       // Redirect based on role
       if (data.user.role === "owner") {
         navigate("/owner/dashboard");
@@ -81,7 +100,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         navigate("/renter/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const message = err instanceof Error ? err.message : "Login failed";
+      setError(message);
+      toast({
+        title: "Login Failed",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -96,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:5000/api/register", {
+      const response = await fetch(`${API_BASE_URL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -115,6 +140,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       localStorage.setItem("rento-user", JSON.stringify(data.user));
       localStorage.setItem("rento-token", data.token);
       
+      toast({
+        title: "Registration Successful",
+        description: `Welcome to Rento, ${data.user.name}!`,
+      });
+      
       // Redirect based on role
       if (data.user.role === "owner") {
         navigate("/owner/dashboard");
@@ -122,7 +152,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         navigate("/renter/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      const message = err instanceof Error ? err.message : "Registration failed";
+      setError(message);
+      toast({
+        title: "Registration Failed",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -133,6 +169,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setToken(null);
     localStorage.removeItem("rento-user");
     localStorage.removeItem("rento-token");
+    toast({
+      title: "Logged Out",
+      description: "You have been successfully logged out.",
+    });
     navigate("/login");
   };
 

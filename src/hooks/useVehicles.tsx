@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Vehicle } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { fetchWithAuth } from "@/utils/api";
 
 export const useVehicles = () => {
   const { user, token } = useAuth();
@@ -16,17 +17,7 @@ export const useVehicles = () => {
     if (!user || !token) return;
     
     try {
-      const response = await fetch('http://localhost:5000/api/vehicles/owner', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch vehicles');
-      }
-      
-      const data = await response.json();
+      const data = await fetchWithAuth('/vehicles/owner');
       setVehicles(data);
       setFilteredVehicles(data);
     } catch (error) {
@@ -69,16 +60,9 @@ export const useVehicles = () => {
     if (!token) return;
     
     try {
-      const response = await fetch(`http://localhost:5000/api/vehicles/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      await fetchWithAuth(`/vehicles/${id}`, {
+        method: 'DELETE'
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete vehicle');
-      }
       
       const updatedVehicles = vehicles.filter(vehicle => vehicle.id !== id);
       setVehicles(updatedVehicles);
@@ -105,18 +89,10 @@ export const useVehicles = () => {
     if (!vehicle) return;
     
     try {
-      const response = await fetch(`http://localhost:5000/api/vehicles/${id}/availability`, {
+      await fetchWithAuth(`/vehicles/${id}/availability`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ availability: !vehicle.availability })
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update vehicle availability');
-      }
       
       const updatedVehicles = vehicles.map(v => {
         if (v.id === id) {
