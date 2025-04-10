@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
@@ -21,31 +20,53 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockVehicles } from "@/data/mockData";
 import { Vehicle } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 const OwnerVehicles = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
-
-  useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      if (user) {
-        // Get vehicles owned by this user
-        const userVehicles = mockVehicles.filter(v => v.ownerId === "o1"); // Using o1 for demo
-        setVehicles(userVehicles);
-        setFilteredVehicles(userVehicles);
+  
+  const fetchVehicles = async () => {
+    if (!user || !token) return;
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/vehicles/owner', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch vehicles');
       }
       
+      const data = await response.json();
+      setVehicles(data);
+      setFilteredVehicles(data);
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load your vehicles. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, [user]);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchVehicles();
+    } else {
+      setLoading(false);
+    }
+  }, [user, token]);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -63,49 +84,95 @@ const OwnerVehicles = () => {
     }
   }, [searchQuery, vehicles]);
 
-  const handleDeleteVehicle = (id: string) => {
-    // In a real app, this would be an API call
-    const updatedVehicles = vehicles.filter(vehicle => vehicle.id !== id);
-    setVehicles(updatedVehicles);
-    setFilteredVehicles(updatedVehicles);
+  const handleDeleteVehicle = async (id: string) => {
+    if (!token) return;
     
-    toast({
-      title: "Vehicle Deleted",
-      description: "The vehicle has been successfully removed from your listings",
-    });
+    try {
+      const response = await fetch(`http://localhost:5000/api/vehicles/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete vehicle');
+      }
+      
+      const updatedVehicles = vehicles.filter(vehicle => vehicle.id !== id);
+      setVehicles(updatedVehicles);
+      setFilteredVehicles(updatedVehicles);
+      
+      toast({
+        title: "Vehicle Deleted",
+        description: "The vehicle has been successfully removed from your listings",
+      });
+    } catch (error) {
+      console.error('Error deleting vehicle:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete vehicle. Please try again later.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleToggleAvailability = (id: string) => {
-    // In a real app, this would be an API call
-    const updatedVehicles = vehicles.map(vehicle => {
-      if (vehicle.id === id) {
-        return {
-          ...vehicle,
-          availability: !vehicle.availability,
-        };
-      }
-      return vehicle;
-    });
-    
-    setVehicles(updatedVehicles);
-    setFilteredVehicles(updatedVehicles.filter(vehicle => {
-      if (searchQuery.trim() === "") return true;
-      
-      const query = searchQuery.toLowerCase();
-      return vehicle.name.toLowerCase().includes(query) ||
-        vehicle.brand.toLowerCase().includes(query) ||
-        vehicle.model.toLowerCase().includes(query) ||
-        vehicle.category.toLowerCase().includes(query) ||
-        vehicle.location.toLowerCase().includes(query);
-    }));
+  const handleToggleAvailability = async (id: string) => {
+    if (!token) return;
     
     const vehicle = vehicles.find(v => v.id === id);
-    toast({
-      title: vehicle?.availability ? "Vehicle Unavailable" : "Vehicle Available",
-      description: vehicle?.availability 
-        ? "Your vehicle is now marked as unavailable for rent" 
-        : "Your vehicle is now available for rent",
-    });
+    if (!vehicle) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/vehicles/${id}/availability`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ availability: !vehicle.availability })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update vehicle availability');
+      }
+      
+      const updatedVehicles = vehicles.map(v => {
+        if (v.id === id) {
+          return {
+            ...v,
+            availability: !v.availability,
+          };
+        }
+        return v;
+      });
+      
+      setVehicles(updatedVehicles);
+      setFilteredVehicles(updatedVehicles.filter(v => {
+        if (searchQuery.trim() === "") return true;
+        
+        const query = searchQuery.toLowerCase();
+        return v.name.toLowerCase().includes(query) ||
+          v.brand.toLowerCase().includes(query) ||
+          v.model.toLowerCase().includes(query) ||
+          v.category.toLowerCase().includes(query) ||
+          v.location.toLowerCase().includes(query);
+      }));
+      
+      toast({
+        title: vehicle.availability ? "Vehicle Unavailable" : "Vehicle Available",
+        description: vehicle.availability 
+          ? "Your vehicle is now marked as unavailable for rent" 
+          : "Your vehicle is now available for rent",
+      });
+    } catch (error) {
+      console.error('Error updating vehicle availability:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update vehicle availability. Please try again later.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -227,7 +294,7 @@ const OwnerVehicles = () => {
           >
             <div className="relative sm:w-40 h-32 rounded-md overflow-hidden flex-shrink-0">
               <img 
-                src={vehicle.image} 
+                src={vehicle.image || "/placeholder.svg"} 
                 alt={vehicle.name} 
                 className="h-full w-full object-cover"
               />
@@ -254,7 +321,7 @@ const OwnerVehicles = () => {
                 </div>
                 <div className="flex items-center text-rento-yellow">
                   <Star size={16} className="fill-current" />
-                  <span className="ml-1 text-sm font-medium">{vehicle.rating}</span>
+                  <span className="ml-1 text-sm font-medium">{vehicle.rating || 0}</span>
                 </div>
               </div>
               
@@ -269,7 +336,7 @@ const OwnerVehicles = () => {
                 </div>
                 <div className="flex items-center text-gray-600">
                   <Calendar size={16} className="mr-1 text-gray-400" />
-                  Added on Jan 2023
+                  {new Date(vehicle.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}
                 </div>
               </div>
               

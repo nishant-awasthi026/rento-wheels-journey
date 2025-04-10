@@ -1,163 +1,154 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
 
-// Define the User type
-interface User {
+type User = {
   id: string;
   name: string;
   email: string;
   role: "owner" | "renter";
-  profileImage?: string;
-}
+};
 
-// Define the context types
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
-  loading: boolean;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: any, role: "owner" | "renter") => Promise<void>;
+  register: (name: string, email: string, password: string, role: "owner" | "renter") => Promise<void>;
   logout: () => void;
-}
+  loading: boolean;
+  error: string | null;
+};
 
-// Create context with default values
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  login: async () => {},
-  register: async () => {},
-  logout: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Custom hook to use auth context
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};
 
-// Provider component
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
-  // Check if user is logged in on initial render
+  // Check for stored auth on mount
   useEffect(() => {
-    const checkLoggedIn = () => {
-      try {
-        const storedUser = localStorage.getItem("rentoUser");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      } catch (error) {
-        console.error("Error checking logged in status:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkLoggedIn();
+    const storedUser = localStorage.getItem("rento-user");
+    const storedToken = localStorage.getItem("rento-token");
+    
+    if (storedUser && storedToken) {
+      setUser(JSON.parse(storedUser));
+      setToken(storedToken);
+    }
+    
+    setLoading(false);
   }, []);
 
-  // Login function
   const login = async (email: string, password: string) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      
-      // In a real app, this would be an API call
-      // This is a mock implementation for demo purposes
-      const mockUser = {
-        id: "user123",
-        name: email.split('@')[0],
-        email,
-        role: email.includes("owner") ? "owner" : "renter",
-      } as User;
-      
-      // Store user in localStorage
-      localStorage.setItem("rentoUser", JSON.stringify(mockUser));
-      setUser(mockUser);
-      
-      toast({
-        title: "Login successful",
-        description: "Welcome back to RENTO!",
+      const response = await fetch("http://localhost:5000/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Login failed");
+      }
+
+      const data = await response.json();
+      setUser(data.user);
+      setToken(data.token);
+      localStorage.setItem("rento-user", JSON.stringify(data.user));
+      localStorage.setItem("rento-token", data.token);
       
-      // Redirect based on user role
-      if (mockUser.role === "owner") {
+      // Redirect based on role
+      if (data.user.role === "owner") {
         navigate("/owner/dashboard");
       } else {
         navigate("/renter/dashboard");
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      toast({
-        title: "Login failed",
-        description: "Invalid email or password",
-        variant: "destructive",
-      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // Register function
-  const register = async (userData: any, role: "owner" | "renter") => {
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    role: "owner" | "renter"
+  ) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      
-      // In a real app, this would be an API call
-      // This is a mock implementation for demo purposes
-      const mockUser = {
-        id: "user" + Math.random().toString(36).substr(2, 9),
-        name: userData.name || userData.email.split('@')[0],
-        email: userData.email,
-        role,
-      } as User;
-      
-      // Store user in localStorage
-      localStorage.setItem("rentoUser", JSON.stringify(mockUser));
-      setUser(mockUser);
-      
-      toast({
-        title: "Registration successful",
-        description: "Welcome to RENTO!",
+      const response = await fetch("http://localhost:5000/api/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, password, role }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Registration failed");
+      }
+
+      const data = await response.json();
+      setUser(data.user);
+      setToken(data.token);
+      localStorage.setItem("rento-user", JSON.stringify(data.user));
+      localStorage.setItem("rento-token", data.token);
       
-      // Redirect based on user role
-      if (role === "owner") {
+      // Redirect based on role
+      if (data.user.role === "owner") {
         navigate("/owner/dashboard");
       } else {
         navigate("/renter/dashboard");
       }
-    } catch (error) {
-      console.error("Registration error:", error);
-      toast({
-        title: "Registration failed",
-        description: "There was a problem with your registration",
-        variant: "destructive",
-      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // Logout function
   const logout = () => {
-    localStorage.removeItem("rentoUser");
     setUser(null);
-    navigate("/");
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out",
-    });
+    setToken(null);
+    localStorage.removeItem("rento-user");
+    localStorage.removeItem("rento-token");
+    navigate("/login");
   };
 
-  const value = {
-    user,
-    loading,
-    login,
-    register,
-    logout,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        login,
+        register,
+        logout,
+        loading,
+        error,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };

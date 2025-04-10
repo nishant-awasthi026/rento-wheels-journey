@@ -5,20 +5,36 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import VehicleGrid from "../vehicle/VehicleGrid";
 import { Vehicle } from "@/types";
-import { mockVehicles } from "@/data/mockData";
+import { useToast } from "@/hooks/use-toast";
 
 const FeaturedVehicles = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      // In a real app, this would be an API call
-      setVehicles(mockVehicles.slice(0, 8));
-      setLoading(false);
-    }, 1000);
-  }, []);
+    const fetchVehicles = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/vehicles?limit=8');
+        if (!response.ok) {
+          throw new Error('Failed to fetch vehicles');
+        }
+        const data = await response.json();
+        setVehicles(data);
+      } catch (error) {
+        console.error('Error fetching vehicles:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load vehicles. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVehicles();
+  }, [toast]);
 
   return (
     <section className="py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">

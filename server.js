@@ -1,4 +1,3 @@
-
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
@@ -631,6 +630,112 @@ app.patch('/api/bookings/:id/status', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Update booking status error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get owner's vehicles 
+app.get('/api/vehicles/owner', authenticateToken, async (req, res) => {
+  try {
+    // Only owners can view their vehicles
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can access their vehicles' });
+    }
+    
+    const ownerId = req.user.id;
+    
+    // Get vehicle details
+    const [vehicles] = await db.execute(
+      `SELECT v.*, 
+        (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id AND is_primary = true LIMIT 1) as image,
+        COALESCE(vr.average_rating, 0) as rating,
+        COALESCE(vr.review_count, 0) as review_count
+      FROM vehicles v
+      LEFT JOIN vehicle_ratings vr ON v.id = vr.vehicle_id
+      WHERE v.owner_id = ?`,
+      [ownerId]
+    );
+    
+    // Format the response
+    const formattedVehicles = vehicles.map(v => ({
+      id: v.id,
+      ownerId: v.owner_id,
+      name: v.name,
+      description: v.description,
+      category: v.category,
+      brand: v.brand,
+      model: v.model,
+      year: v.year,
+      pricePerDay: v.price_per_day,
+      pricePerWeek: v.price_per_week,
+      pricePerMonth: v.price_per_month,
+      location: v.location,
+      image: v.image ? `/uploads/${path.basename(v.image)}` : null,
+      rating: parseFloat(v.rating),
+      reviewCount: v.review_count,
+      features: v.features ? JSON.parse(v.features) : [],
+      specifications: v.specifications ? JSON.parse(v.specifications) : {},
+      availability: v.availability === 1,
+      createdAt: v.created_at
+    }));
+    
+    res.status(200).json(formattedVehicles);
+  } catch (error) {
+    console.error('Get owner vehicles error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update vehicle availability
+app.patch('/api/vehicles/:id/availability', authenticateToken, async (req, res) => {
+  try {
+    const vehicleId = req.params.id;
+    const { availability } = req.body;
+    
+    // Verify that user owns the vehicle
+    const [vehicles] = await db.execute(
+      'SELECT * FROM vehicles WHERE id = ? AND owner_id = ?',
+      [vehicleId, req.user.id]
+    );
+    
+    if (vehicles.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found or unauthorized' });
+    }
+    
+    // Update availability
+    await db.execute(
+      'UPDATE vehicles SET availability = ? WHERE id = ?',
+      [availability, vehicleId]
+    );
+    
+    res.status(200).json({ message: 'Vehicle availability updated successfully' });
+  } catch (error) {
+    console.error('Update vehicle availability error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete a vehicle
+app.delete('/api/vehicles/:id', authenticateToken, async (req, res) => {
+  try {
+    const vehicleId = req.params.id;
+    
+    // Verify that user owns the vehicle
+    const [vehicles] = await db.execute(
+      'SELECT * FROM vehicles WHERE id = ? AND owner_id = ?',
+      [vehicleId, req.user.id]
+    );
+    
+    if (vehicles.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found or unauthorized' });
+    }
+    
+    // Delete vehicle 
+    await db.execute('DELETE FROM vehicles WHERE id = ?', [vehicleId]);
+    
+    res.status(200).json({ message: 'Vehicle deleted successfully' });
+  } catch (error) {
+    console.error('Delete vehicle error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
@@ -8,8 +7,8 @@ import VehicleFilters from "@/components/vehicle/VehicleFilters";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { mockVehicles } from "@/data/mockData";
 import { Vehicle } from "@/types";
+import { useToast } from "@/hooks/use-toast";
 
 const VehicleSearch = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,71 +17,63 @@ const VehicleSearch = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const { toast } = useToast();
 
   // Get initial category from URL
   const initialCategory = searchParams.get("category");
 
+  // Fetch vehicles from API
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setVehicles(mockVehicles);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  useEffect(() => {
-    if (!loading) {
-      applyFilters();
-    }
-  }, [vehicles, searchParams, loading]);
-
-  const applyFilters = () => {
-    let filtered = [...vehicles];
+    const fetchVehicles = async () => {
+      setLoading(true);
+      
+      try {
+        // Build query string from search params
+        const queryParams = new URLSearchParams();
+        
+        if (searchParams.get("q")) {
+          queryParams.set("search", searchParams.get("q") || "");
+        }
+        
+        if (searchParams.get("category")) {
+          queryParams.set("category", searchParams.get("category") || "");
+        }
+        
+        if (searchParams.get("minPrice")) {
+          queryParams.set("minPrice", searchParams.get("minPrice") || "");
+        }
+        
+        if (searchParams.get("maxPrice")) {
+          queryParams.set("maxPrice", searchParams.get("maxPrice") || "");
+        }
+        
+        if (searchParams.get("location")) {
+          queryParams.set("location", searchParams.get("location") || "");
+        }
+        
+        const response = await fetch(`http://localhost:5000/api/vehicles?${queryParams.toString()}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch vehicles');
+        }
+        
+        const data = await response.json();
+        setVehicles(data);
+        setFilteredVehicles(data);
+      } catch (error) {
+        console.error('Error fetching vehicles:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load vehicles. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Apply search query
-    const query = searchParams.get("q");
-    if (query) {
-      const searchTerms = query.toLowerCase().split(" ");
-      filtered = filtered.filter(vehicle => 
-        searchTerms.some(term => 
-          vehicle.name.toLowerCase().includes(term) ||
-          vehicle.description.toLowerCase().includes(term) ||
-          vehicle.brand.toLowerCase().includes(term) ||
-          vehicle.model.toLowerCase().includes(term) ||
-          vehicle.category.toLowerCase().includes(term) ||
-          vehicle.location.toLowerCase().includes(term)
-        )
-      );
-    }
-    
-    // Apply category filter
-    const category = searchParams.get("category");
-    if (category) {
-      filtered = filtered.filter(vehicle => 
-        vehicle.category.toLowerCase() === category.toLowerCase()
-      );
-    }
-    
-    // Apply price range filter
-    const minPrice = searchParams.get("minPrice");
-    const maxPrice = searchParams.get("maxPrice");
-    if (minPrice) {
-      filtered = filtered.filter(vehicle => vehicle.pricePerDay >= Number(minPrice));
-    }
-    if (maxPrice) {
-      filtered = filtered.filter(vehicle => vehicle.pricePerDay <= Number(maxPrice));
-    }
-    
-    // Apply location filter
-    const location = searchParams.get("location");
-    if (location) {
-      filtered = filtered.filter(vehicle => 
-        vehicle.location.toLowerCase().includes(location.toLowerCase())
-      );
-    }
-    
-    setFilteredVehicles(filtered);
-  };
+    fetchVehicles();
+  }, [searchParams, toast]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
