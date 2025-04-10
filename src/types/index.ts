@@ -1,4 +1,3 @@
-
 // User Types
 export interface User {
   id: string;
@@ -32,6 +31,7 @@ export interface Vehicle {
   specifications?: Record<string, string>;
   availability?: boolean;
   availableDates?: DateRange[];
+  createdAt?: string; // Adding the createdAt property as optional
 }
 
 // Booking Types

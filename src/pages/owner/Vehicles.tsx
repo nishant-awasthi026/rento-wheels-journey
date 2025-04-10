@@ -336,7 +336,10 @@ const OwnerVehicles = () => {
                 </div>
                 <div className="flex items-center text-gray-600">
                   <Calendar size={16} className="mr-1 text-gray-400" />
-                  {new Date(vehicle.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}
+                  {vehicle.createdAt 
+                    ? new Date(vehicle.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+                    : 'No date'
+                  }
                 </div>
               </div>
               

@@ -49,7 +49,7 @@ const Register = () => {
     }
 
     try {
-      await register(formData, role);
+      await register(name, email, password, role);
     } catch (err) {
       setError("Registration failed. Please try again later.");
     }
