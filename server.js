@@ -1,0 +1,641 @@
+
+const express = require('express');
+const mysql = require('mysql2/promise');
+const cors = require('cors');
+const bcrypt = require('bcrypt');
+const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
+const path = require('path');
+const jwt = require('jsonwebtoken');
+const db = require('./db'); // Import database connection
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Configure file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
+
+// JWT Authentication Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) return res.status(401).json({ error: 'Access denied' });
+  
+  jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Routes
+
+// User Authentication
+app.post('/api/register', async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    
+    // Check if user already exists
+    const [existingUsers] = await db.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+    
+    // Create new user
+    await db.execute(
+      'INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)',
+      [userId, name, email, hashedPassword, role]
+    );
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: userId, email, role },
+      process.env.JWT_SECRET || 'your_jwt_secret',
+      { expiresIn: '24h' }
+    );
+    
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: { id: userId, name, email, role }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Find user by email
+    const [users] = await db.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (users.length === 0) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+    
+    const user = users[0];
+    
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET || 'your_jwt_secret',
+      { expiresIn: '24h' }
+    );
+    
+    res.status(200).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Renter Document Upload
+app.post('/api/renters/documents', authenticateToken, upload.single('document'), async (req, res) => {
+  try {
+    const { documentType, documentNumber } = req.body;
+    const userId = req.user.id;
+    
+    // Only renters can upload documents
+    if (req.user.role !== 'renter') {
+      return res.status(403).json({ error: 'Only renters can upload documents' });
+    }
+    
+    // Check if document already exists
+    const [existingDocs] = await db.execute(
+      'SELECT * FROM renter_documents WHERE user_id = ? AND document_type = ?',
+      [userId, documentType]
+    );
+    
+    const documentId = uuidv4();
+    const documentPath = req.file.path;
+    
+    if (existingDocs.length > 0) {
+      // Update existing document
+      await db.execute(
+        'UPDATE renter_documents SET document_number = ?, document_image = ?, verified = FALSE, upload_date = CURRENT_TIMESTAMP WHERE user_id = ? AND document_type = ?',
+        [documentNumber, documentPath, userId, documentType]
+      );
+    } else {
+      // Create new document
+      await db.execute(
+        'INSERT INTO renter_documents (id, user_id, document_type, document_number, document_image) VALUES (?, ?, ?, ?, ?)',
+        [documentId, userId, documentType, documentNumber, documentPath]
+      );
+    }
+    
+    res.status(201).json({ message: 'Document uploaded successfully' });
+  } catch (error) {
+    console.error('Document upload error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Vehicle Management
+app.post('/api/vehicles', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      category,
+      brand,
+      model,
+      year,
+      pricePerDay,
+      pricePerWeek,
+      pricePerMonth,
+      location,
+      features,
+      specifications
+    } = req.body;
+    
+    // Only owners can add vehicles
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can add vehicles' });
+    }
+    
+    const vehicleId = uuidv4();
+    const ownerId = req.user.id;
+    
+    // Create vehicle
+    await db.execute(
+      `INSERT INTO vehicles (
+        id, owner_id, name, description, category, brand, model, year,
+        price_per_day, price_per_week, price_per_month, location, features, specifications
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        vehicleId, ownerId, name, description, category, brand, model, year,
+        pricePerDay, pricePerWeek, pricePerMonth, location, 
+        features ? JSON.stringify(features) : null,
+        specifications ? JSON.stringify(specifications) : null
+      ]
+    );
+    
+    // Add primary image if uploaded
+    if (req.file) {
+      const imageId = uuidv4();
+      const imagePath = req.file.path;
+      
+      await db.execute(
+        'INSERT INTO vehicle_images (id, vehicle_id, image_url, is_primary) VALUES (?, ?, ?, ?)',
+        [imageId, vehicleId, imagePath, true]
+      );
+    }
+    
+    res.status(201).json({
+      message: 'Vehicle added successfully',
+      vehicleId
+    });
+  } catch (error) {
+    console.error('Add vehicle error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get all vehicles
+app.get('/api/vehicles', async (req, res) => {
+  try {
+    let query = `
+      SELECT v.*, 
+        (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id AND is_primary = true LIMIT 1) as image,
+        COALESCE(vr.average_rating, 0) as rating,
+        COALESCE(vr.review_count, 0) as review_count
+      FROM vehicles v
+      LEFT JOIN vehicle_ratings vr ON v.id = vr.vehicle_id
+      WHERE v.availability = true
+    `;
+    
+    const params = [];
+    
+    // Apply filters if provided
+    if (req.query.category) {
+      query += ' AND v.category = ?';
+      params.push(req.query.category);
+    }
+    
+    if (req.query.location) {
+      query += ' AND v.location LIKE ?';
+      params.push(`%${req.query.location}%`);
+    }
+    
+    if (req.query.minPrice) {
+      query += ' AND v.price_per_day >= ?';
+      params.push(parseFloat(req.query.minPrice));
+    }
+    
+    if (req.query.maxPrice) {
+      query += ' AND v.price_per_day <= ?';
+      params.push(parseFloat(req.query.maxPrice));
+    }
+    
+    if (req.query.search) {
+      query += ` AND (
+        v.name LIKE ? OR
+        v.brand LIKE ? OR
+        v.model LIKE ? OR
+        v.description LIKE ?
+      )`;
+      const searchParam = `%${req.query.search}%`;
+      params.push(searchParam, searchParam, searchParam, searchParam);
+    }
+    
+    // Add sorting
+    const sortBy = req.query.sortBy || 'created_at';
+    const sortOrder = req.query.sortOrder || 'DESC';
+    query += ` ORDER BY v.${sortBy} ${sortOrder}`;
+    
+    const [vehicles] = await db.execute(query, params);
+    
+    // Format the response
+    const formattedVehicles = vehicles.map(v => ({
+      id: v.id,
+      ownerId: v.owner_id,
+      name: v.name,
+      description: v.description,
+      category: v.category,
+      brand: v.brand,
+      model: v.model,
+      year: v.year,
+      pricePerDay: v.price_per_day,
+      pricePerWeek: v.price_per_week,
+      pricePerMonth: v.price_per_month,
+      location: v.location,
+      image: v.image ? `/uploads/${path.basename(v.image)}` : null,
+      rating: parseFloat(v.rating),
+      reviewCount: v.review_count,
+      features: v.features ? JSON.parse(v.features) : [],
+      specifications: v.specifications ? JSON.parse(v.specifications) : {},
+      availability: v.availability,
+      createdAt: v.created_at
+    }));
+    
+    res.status(200).json(formattedVehicles);
+  } catch (error) {
+    console.error('Get vehicles error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get single vehicle
+app.get('/api/vehicles/:id', async (req, res) => {
+  try {
+    const vehicleId = req.params.id;
+    
+    // Get vehicle details
+    const [vehicles] = await db.execute(
+      `SELECT v.*, 
+        COALESCE(vr.average_rating, 0) as rating,
+        COALESCE(vr.review_count, 0) as review_count,
+        u.name as owner_name
+      FROM vehicles v
+      LEFT JOIN vehicle_ratings vr ON v.id = vr.vehicle_id
+      LEFT JOIN users u ON v.owner_id = u.id
+      WHERE v.id = ?`,
+      [vehicleId]
+    );
+    
+    if (vehicles.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    const vehicle = vehicles[0];
+    
+    // Get vehicle images
+    const [images] = await db.execute(
+      'SELECT id, image_url, is_primary FROM vehicle_images WHERE vehicle_id = ?',
+      [vehicleId]
+    );
+    
+    // Get reviews
+    const [reviews] = await db.execute(
+      `SELECT r.id, r.rating, r.comment, r.created_at, u.name as renter_name
+      FROM reviews r
+      JOIN users u ON r.renter_id = u.id
+      WHERE r.vehicle_id = ?
+      ORDER BY r.created_at DESC`,
+      [vehicleId]
+    );
+    
+    // Format the response
+    const formattedVehicle = {
+      id: vehicle.id,
+      ownerId: vehicle.owner_id,
+      ownerName: vehicle.owner_name,
+      name: vehicle.name,
+      description: vehicle.description,
+      category: vehicle.category,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      year: vehicle.year,
+      pricePerDay: vehicle.price_per_day,
+      pricePerWeek: vehicle.price_per_week,
+      pricePerMonth: vehicle.price_per_month,
+      location: vehicle.location,
+      images: images.map(img => ({
+        id: img.id,
+        url: `/uploads/${path.basename(img.image_url)}`,
+        isPrimary: img.is_primary
+      })),
+      rating: parseFloat(vehicle.rating),
+      reviewCount: vehicle.review_count,
+      reviews: reviews.map(r => ({
+        id: r.id,
+        rating: r.rating,
+        comment: r.comment,
+        renterName: r.renter_name,
+        createdAt: r.created_at
+      })),
+      features: vehicle.features ? JSON.parse(vehicle.features) : [],
+      specifications: vehicle.specifications ? JSON.parse(vehicle.specifications) : {},
+      availability: vehicle.availability,
+      createdAt: vehicle.created_at
+    };
+    
+    res.status(200).json(formattedVehicle);
+  } catch (error) {
+    console.error('Get vehicle details error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Booking Management
+app.post('/api/bookings', authenticateToken, async (req, res) => {
+  try {
+    const { vehicleId, startDate, endDate } = req.body;
+    const renterId = req.user.id;
+    
+    // Only renters can create bookings
+    if (req.user.role !== 'renter') {
+      return res.status(403).json({ error: 'Only renters can create bookings' });
+    }
+    
+    // Check if vehicle exists and is available
+    const [vehicles] = await db.execute(
+      'SELECT * FROM vehicles WHERE id = ? AND availability = true',
+      [vehicleId]
+    );
+    
+    if (vehicles.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found or not available' });
+    }
+    
+    const vehicle = vehicles[0];
+    
+    // Check if vehicle is already booked for the selected dates
+    const [existingBookings] = await db.execute(
+      `SELECT * FROM bookings 
+      WHERE vehicle_id = ? 
+      AND status IN ('confirmed', 'pending')
+      AND (
+        (start_date <= ? AND end_date >= ?) OR
+        (start_date <= ? AND end_date >= ?) OR
+        (start_date >= ? AND end_date <= ?)
+      )`,
+      [vehicleId, startDate, startDate, endDate, endDate, startDate, endDate]
+    );
+    
+    if (existingBookings.length > 0) {
+      return res.status(400).json({ error: 'Vehicle is not available for the selected dates' });
+    }
+    
+    // Calculate booking duration and total amount
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const durationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    
+    let totalAmount;
+    if (durationDays >= 30 && vehicle.price_per_month) {
+      const months = Math.floor(durationDays / 30);
+      const remainingDays = durationDays % 30;
+      totalAmount = (months * vehicle.price_per_month) + (remainingDays * vehicle.price_per_day);
+    } else if (durationDays >= 7 && vehicle.price_per_week) {
+      const weeks = Math.floor(durationDays / 7);
+      const remainingDays = durationDays % 7;
+      totalAmount = (weeks * vehicle.price_per_week) + (remainingDays * vehicle.price_per_day);
+    } else {
+      totalAmount = durationDays * vehicle.price_per_day;
+    }
+    
+    // Create booking
+    const bookingId = uuidv4();
+    await db.execute(
+      `INSERT INTO bookings (
+        id, vehicle_id, renter_id, start_date, end_date, total_amount, status, payment_status
+      ) VALUES (?, ?, ?, ?, ?, ?, 'pending', 'pending')`,
+      [bookingId, vehicleId, renterId, startDate, endDate, totalAmount]
+    );
+    
+    res.status(201).json({
+      message: 'Booking created successfully',
+      booking: {
+        id: bookingId,
+        vehicleId,
+        renterId,
+        startDate,
+        endDate,
+        totalAmount,
+        status: 'pending',
+        paymentStatus: 'pending'
+      }
+    });
+  } catch (error) {
+    console.error('Create booking error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get bookings by user
+app.get('/api/bookings', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    let query;
+    let params;
+    
+    if (userRole === 'renter') {
+      // Get bookings for renter
+      query = `
+        SELECT b.*, v.name as vehicle_name, v.brand, v.model, 
+          (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id AND is_primary = true LIMIT 1) as vehicle_image
+        FROM bookings b
+        JOIN vehicles v ON b.vehicle_id = v.id
+        WHERE b.renter_id = ?
+      `;
+      params = [userId];
+    } else {
+      // Get bookings for owner
+      query = `
+        SELECT b.*, v.name as vehicle_name, v.brand, v.model, u.name as renter_name, u.email as renter_email,
+          (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id AND is_primary = true LIMIT 1) as vehicle_image
+        FROM bookings b
+        JOIN vehicles v ON b.vehicle_id = v.id
+        JOIN users u ON b.renter_id = u.id
+        WHERE v.owner_id = ?
+      `;
+      params = [userId];
+    }
+    
+    // Apply status filter if provided
+    if (req.query.status) {
+      query += ' AND b.status = ?';
+      params.push(req.query.status);
+    }
+    
+    // Apply date filters if provided
+    if (req.query.startDate) {
+      query += ' AND b.start_date >= ?';
+      params.push(req.query.startDate);
+    }
+    
+    if (req.query.endDate) {
+      query += ' AND b.end_date <= ?';
+      params.push(req.query.endDate);
+    }
+    
+    // Add sorting
+    query += ' ORDER BY b.created_at DESC';
+    
+    const [bookings] = await db.execute(query, params);
+    
+    // Format the response
+    const formattedBookings = bookings.map(b => ({
+      id: b.id,
+      vehicleId: b.vehicle_id,
+      renterId: b.renter_id,
+      startDate: b.start_date,
+      endDate: b.end_date,
+      totalAmount: b.total_amount,
+      status: b.status,
+      paymentStatus: b.payment_status,
+      createdAt: b.created_at,
+      vehicle: {
+        name: b.vehicle_name,
+        brand: b.brand,
+        model: b.model,
+        image: b.vehicle_image ? `/uploads/${path.basename(b.vehicle_image)}` : null
+      },
+      renter: userRole === 'owner' ? {
+        name: b.renter_name,
+        email: b.renter_email
+      } : undefined
+    }));
+    
+    res.status(200).json(formattedBookings);
+  } catch (error) {
+    console.error('Get bookings error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update booking status (accept/reject/cancel)
+app.patch('/api/bookings/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { status } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    // Check if booking exists
+    const [bookings] = await db.execute(
+      'SELECT b.*, v.owner_id FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = ?',
+      [bookingId]
+    );
+    
+    if (bookings.length === 0) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    
+    const booking = bookings[0];
+    
+    // Verify user authorization
+    if (userRole === 'owner' && booking.owner_id !== userId) {
+      return res.status(403).json({ error: 'You are not authorized to update this booking' });
+    }
+    
+    if (userRole === 'renter' && booking.renter_id !== userId) {
+      return res.status(403).json({ error: 'You are not authorized to update this booking' });
+    }
+    
+    // Validate status change
+    const validStatusChanges = {
+      owner: {
+        pending: ['confirmed', 'cancelled'],
+        confirmed: ['completed', 'cancelled']
+      },
+      renter: {
+        pending: ['cancelled'],
+        confirmed: ['cancelled']
+      }
+    };
+    
+    if (!validStatusChanges[userRole][booking.status]?.includes(status)) {
+      return res.status(400).json({ 
+        error: `Cannot change booking status from '${booking.status}' to '${status}' as ${userRole}` 
+      });
+    }
+    
+    // Update booking status
+    await db.execute(
+      'UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [status, bookingId]
+    );
+    
+    res.status(200).json({
+      message: 'Booking status updated successfully',
+      status
+    });
+  } catch (error) {
+    console.error('Update booking status error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
