@@ -22,32 +22,18 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockVehicles, mockBookings } from "@/data/mockData";
-import { Booking, Vehicle } from "@/types";
+import { Booking } from "@/types";
+import { useBookings } from "@/hooks/useBookings";
 
 const MyBookings = () => {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const { allBookings: bookings, loading } = useBookings();
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      if (user) {
-        // Get bookings for this user
-        const userBookings = mockBookings.filter(b => b.renterId === "r1"); // Using r1 for demo
-        setBookings(userBookings);
-        setFilteredBookings(userBookings);
-      }
-      
-      setLoading(false);
-    }, 1000);
-  }, [user]);
-
-  useEffect(() => {
+    // Apply filters whenever dependencies change
     applyFilters();
   }, [searchQuery, filter, bookings]);
 
@@ -58,12 +44,12 @@ const MyBookings = () => {
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(booking => {
-        const vehicle = mockVehicles.find(v => v.id === booking.vehicleId);
+        const vehicle = booking.vehicle;
         return (
-          vehicle?.name.toLowerCase().includes(query) ||
-          vehicle?.brand.toLowerCase().includes(query) ||
-          vehicle?.model.toLowerCase().includes(query) ||
-          vehicle?.location.toLowerCase().includes(query) ||
+          vehicle?.name?.toLowerCase().includes(query) ||
+          vehicle?.brand?.toLowerCase().includes(query) ||
+          vehicle?.model?.toLowerCase().includes(query) ||
+          vehicle?.location?.toLowerCase().includes(query) ||
           booking.id.toLowerCase().includes(query)
         );
       });
@@ -75,10 +61,6 @@ const MyBookings = () => {
     }
     
     setFilteredBookings(filtered);
-  };
-
-  const getVehicleDetails = (vehicleId: string): Vehicle | undefined => {
-    return mockVehicles.find(v => v.id === vehicleId);
   };
 
   const getBookingStatusBadge = (status: string) => {
@@ -213,7 +195,7 @@ const MyBookings = () => {
     return (
       <div className="space-y-4">
         {bookings.map(booking => {
-          const vehicle = getVehicleDetails(booking.vehicleId);
+          const vehicle = booking.vehicle;
           return (
             <div 
               key={booking.id} 

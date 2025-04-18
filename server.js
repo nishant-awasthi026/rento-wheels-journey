@@ -557,6 +557,7 @@ app.get('/api/bookings', authenticateToken, async (req, res) => {
       status: b.status,
       paymentStatus: b.payment_status,
       createdAt: b.created_at,
+      updatedAt: b.updated_at,
       vehicle: {
         name: b.vehicle_name,
         brand: b.brand,
@@ -741,6 +742,150 @@ app.delete('/api/vehicles/:id', authenticateToken, async (req, res) => {
     res.status(200).json({ message: 'Vehicle deleted successfully' });
   } catch (error) {
     console.error('Delete vehicle error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Payment Processing
+app.post('/api/payments', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId, method, amount } = req.body;
+    const userId = req.user.id;
+    
+    // Verify booking exists and belongs to the user
+    const [bookings] = await db.execute(
+      'SELECT * FROM bookings WHERE id = ? AND renter_id = ?',
+      [bookingId, userId]
+    );
+    
+    if (bookings.length === 0) {
+      return res.status(404).json({ error: 'Booking not found or unauthorized' });
+    }
+    
+    // Create payment record
+    const paymentId = uuidv4();
+    await db.execute(
+      'INSERT INTO payments (id, booking_id, amount, method, status) VALUES (?, ?, ?, ?, ?)',
+      [paymentId, bookingId, amount, method, method === 'cash' ? 'pending' : 'completed']
+    );
+    
+    // Update booking payment status and booking status if UPI
+    await db.execute(
+      'UPDATE bookings SET payment_status = ?, status = ? WHERE id = ?',
+      [
+        method === 'cash' ? 'pending' : 'completed',
+        method === 'cash' ? 'pending' : 'confirmed',
+        bookingId
+      ]
+    );
+    
+    res.status(201).json({
+      message: 'Payment processed successfully',
+      paymentId,
+      status: method === 'cash' ? 'pending' : 'completed'
+    });
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Generate UPI Payment Link (simplified mock)
+app.post('/api/payments/upi/generate', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId, amount, description } = req.body;
+    
+    // In a real app, you would integrate with a payment gateway like Razorpay
+    // For this demo, we'll just create a mock payment link
+    
+    const paymentId = uuidv4();
+    const paymentLink = `https://mockpayment.com/pay/${paymentId}?amount=${amount}&description=${encodeURIComponent(description)}`;
+    
+    // Store payment information
+    await db.execute(
+      'INSERT INTO payments (id, booking_id, amount, method, status, payment_link) VALUES (?, ?, ?, ?, ?, ?)',
+      [paymentId, bookingId, amount, 'upi', 'pending', paymentLink]
+    );
+    
+    res.status(200).json({
+      paymentId,
+      paymentLink,
+      amount,
+      message: 'UPI payment link generated successfully'
+    });
+  } catch (error) {
+    console.error('UPI link generation error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Verify UPI Payment
+app.get('/api/payments/upi/verify/:paymentId', authenticateToken, async (req, res) => {
+  try {
+    const paymentId = req.params.paymentId;
+    
+    // In a real app, you would check with payment gateway about status
+    // For this demo, we'll simulate success
+    
+    // Update payment status
+    await db.execute(
+      'UPDATE payments SET status = ? WHERE id = ?',
+      ['completed', paymentId]
+    );
+    
+    // Get booking ID from payment
+    const [payments] = await db.execute(
+      'SELECT booking_id FROM payments WHERE id = ?',
+      [paymentId]
+    );
+    
+    if (payments.length > 0) {
+      const bookingId = payments[0].booking_id;
+      
+      // Update booking status and payment status
+      await db.execute(
+        'UPDATE bookings SET status = ?, payment_status = ? WHERE id = ?',
+        ['confirmed', 'completed', bookingId]
+      );
+    }
+    
+    res.status(200).json({
+      verified: true,
+      status: 'completed',
+      message: 'Payment verified successfully'
+    });
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get Payment Status
+app.get('/api/payments/status/:bookingId', authenticateToken, async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+    
+    // Get payment details
+    const [payments] = await db.execute(
+      'SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at DESC LIMIT 1',
+      [bookingId]
+    );
+    
+    if (payments.length === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    
+    const payment = payments[0];
+    
+    res.status(200).json({
+      paymentId: payment.id,
+      status: payment.status,
+      method: payment.method,
+      amount: payment.amount,
+      createdAt: payment.created_at
+    });
+  } catch (error) {
+    console.error('Get payment status error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

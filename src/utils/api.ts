@@ -231,3 +231,40 @@ export const userAPI = {
     }
   }
 };
+
+// Payment APIs
+export const paymentAPI = {
+  // Process payment for booking
+  processPayment: async (paymentData: {
+    bookingId: string;
+    method: 'upi' | 'cash';
+    amount: number;
+  }) => {
+    return fetchWithAuth('/payments', {
+      method: 'POST',
+      body: JSON.stringify(paymentData)
+    });
+  },
+  
+  // Get payment status
+  getPaymentStatus: async (bookingId: string) => {
+    return fetchWithAuth(`/payments/status/${bookingId}`, { method: 'GET' });
+  },
+  
+  // Generate UPI payment link
+  generateUpiLink: async (paymentData: {
+    bookingId: string;
+    amount: number;
+    description: string;
+  }) => {
+    return fetchWithAuth('/payments/upi/generate', {
+      method: 'POST',
+      body: JSON.stringify(paymentData)
+    });
+  },
+  
+  // Verify UPI payment
+  verifyUpiPayment: async (paymentId: string) => {
+    return fetchWithAuth(`/payments/upi/verify/${paymentId}`, { method: 'GET' });
+  }
+};
