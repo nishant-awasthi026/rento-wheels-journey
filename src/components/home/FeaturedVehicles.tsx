@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import VehicleGrid from "../vehicle/VehicleGrid";
 import { Vehicle } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE_URL } from "@/utils/api";
+import { vehicleAPI } from "@/utils/api";
 
 const FeaturedVehicles = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -17,15 +17,8 @@ const FeaturedVehicles = () => {
     const fetchVehicles = async () => {
       try {
         setLoading(true);
-        // Using direct fetch but with our centralized API base URL
-        const response = await fetch(`${API_BASE_URL}/vehicles?limit=8`);
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Failed to fetch vehicles: ${response.status}`);
-        }
-        
-        const data = await response.json();
+        // Using our API utility with limit parameter
+        const data = await vehicleAPI.getVehicles({ limit: 8 });
         setVehicles(data);
       } catch (error) {
         console.error('Error fetching vehicles:', error);
