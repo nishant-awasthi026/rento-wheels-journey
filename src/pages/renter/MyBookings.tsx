@@ -46,10 +46,10 @@ const MyBookings = () => {
       filtered = filtered.filter(booking => {
         const vehicle = booking.vehicle;
         return (
-          vehicle?.name?.toLowerCase().includes(query) ||
-          vehicle?.brand?.toLowerCase().includes(query) ||
-          vehicle?.model?.toLowerCase().includes(query) ||
-          vehicle?.location?.toLowerCase().includes(query) ||
+          (vehicle?.name?.toLowerCase().includes(query) || false) ||
+          (vehicle?.brand?.toLowerCase().includes(query) || false) ||
+          (vehicle?.model?.toLowerCase().includes(query) || false) ||
+          (vehicle?.location?.toLowerCase().includes(query) || false) ||
           booking.id.toLowerCase().includes(query)
         );
       });
@@ -204,7 +204,7 @@ const MyBookings = () => {
               <div className="sm:w-40 h-32 rounded-md overflow-hidden flex-shrink-0">
                 <img 
                   src={vehicle?.image || "/placeholder.svg"} 
-                  alt={vehicle?.name} 
+                  alt={vehicle?.name || "Vehicle"} 
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -212,9 +212,9 @@ const MyBookings = () => {
               <div className="flex-grow">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-medium text-lg text-gray-900">{vehicle?.name}</h3>
+                    <h3 className="font-medium text-lg text-gray-900">{vehicle?.name || "Vehicle"}</h3>
                     <p className="text-sm text-gray-500">
-                      {vehicle?.brand} {vehicle?.model} • {vehicle?.category}
+                      {vehicle?.brand || ""} {vehicle?.model || ""} • {vehicle?.category || ""}
                     </p>
                   </div>
                   {getBookingStatusBadge(booking.status)}
@@ -229,7 +229,7 @@ const MyBookings = () => {
                   </div>
                   <div className="flex items-center text-gray-600">
                     <Map size={16} className="mr-1 text-gray-400" />
-                    {vehicle?.location}
+                    {vehicle?.location || "Location not available"}
                   </div>
                 </div>
                 

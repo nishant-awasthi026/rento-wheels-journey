@@ -30,12 +30,12 @@ const ManageBookings = () => {
     const query = searchQuery.toLowerCase();
     return bookings.filter(booking => {
       return (
-        booking.vehicle?.name?.toLowerCase().includes(query) ||
-        booking.vehicle?.brand?.toLowerCase().includes(query) ||
-        booking.vehicle?.model?.toLowerCase().includes(query) ||
-        booking.vehicle?.location?.toLowerCase().includes(query) ||
-        booking.renter?.name?.toLowerCase().includes(query) ||
-        booking.renter?.email?.toLowerCase().includes(query)
+        (booking.vehicle?.name?.toLowerCase().includes(query) || false) ||
+        (booking.vehicle?.brand?.toLowerCase().includes(query) || false) ||
+        (booking.vehicle?.model?.toLowerCase().includes(query) || false) ||
+        (booking.vehicle?.location?.toLowerCase().includes(query) || false) ||
+        (booking.renter?.name?.toLowerCase().includes(query) || false) ||
+        (booking.renter?.email?.toLowerCase().includes(query) || false)
       );
     });
   };
@@ -176,7 +176,7 @@ const ManageBookings = () => {
                       <div className="sm:w-40 h-32 rounded-md overflow-hidden flex-shrink-0">
                         <img 
                           src={booking.vehicle?.image || "/placeholder.svg"} 
-                          alt={booking.vehicle?.name} 
+                          alt={booking.vehicle?.name || "Vehicle"} 
                           className="h-full w-full object-cover"
                         />
                       </div>
@@ -184,9 +184,9 @@ const ManageBookings = () => {
                       <div className="flex-grow">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name}</h3>
+                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name || "Vehicle"}</h3>
                             <p className="text-sm text-gray-500">
-                              {booking.vehicle?.brand} {booking.vehicle?.model}
+                              {booking.vehicle?.brand || ""} {booking.vehicle?.model || ""}
                             </p>
                           </div>
                           <div className="bg-green-50 text-green-700 border border-green-200 px-2 py-1 text-xs rounded-md">
@@ -202,7 +202,7 @@ const ManageBookings = () => {
                             </span>
                           </div>
                           
-                          <div className="font-medium mt-1">Renter: {booking.renter?.name}</div>
+                          <div className="font-medium mt-1">Renter: {booking.renter?.name || "Unknown"}</div>
                         </div>
                         
                         <div className="mt-3 flex justify-between items-center">
@@ -247,7 +247,7 @@ const ManageBookings = () => {
                       <div className="sm:w-40 h-32 rounded-md overflow-hidden flex-shrink-0">
                         <img 
                           src={booking.vehicle?.image || "/placeholder.svg"} 
-                          alt={booking.vehicle?.name} 
+                          alt={booking.vehicle?.name || "Vehicle"} 
                           className="h-full w-full object-cover"
                         />
                       </div>
@@ -255,9 +255,9 @@ const ManageBookings = () => {
                       <div className="flex-grow">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name}</h3>
+                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name || "Vehicle"}</h3>
                             <p className="text-sm text-gray-500">
-                              {booking.vehicle?.brand} {booking.vehicle?.model}
+                              {booking.vehicle?.brand || ""} {booking.vehicle?.model || ""}
                             </p>
                           </div>
                           <div className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 text-xs rounded-md">
@@ -273,7 +273,7 @@ const ManageBookings = () => {
                             </span>
                           </div>
                           
-                          <div className="font-medium mt-1">Renter: {booking.renter?.name}</div>
+                          <div className="font-medium mt-1">Renter: {booking.renter?.name || "Unknown"}</div>
                         </div>
                         
                         <div className="mt-3 flex justify-between items-center">
@@ -313,7 +313,7 @@ const ManageBookings = () => {
                       <div className="sm:w-40 h-32 rounded-md overflow-hidden flex-shrink-0">
                         <img 
                           src={booking.vehicle?.image || "/placeholder.svg"} 
-                          alt={booking.vehicle?.name} 
+                          alt={booking.vehicle?.name || "Vehicle"} 
                           className="h-full w-full object-cover"
                         />
                       </div>
@@ -321,9 +321,9 @@ const ManageBookings = () => {
                       <div className="flex-grow">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name}</h3>
+                            <h3 className="font-medium text-lg text-gray-900">{booking.vehicle?.name || "Vehicle"}</h3>
                             <p className="text-sm text-gray-500">
-                              {booking.vehicle?.brand} {booking.vehicle?.model}
+                              {booking.vehicle?.brand || ""} {booking.vehicle?.model || ""}
                             </p>
                           </div>
                           <div className="bg-red-50 text-red-700 border border-red-200 px-2 py-1 text-xs rounded-md">
@@ -339,7 +339,7 @@ const ManageBookings = () => {
                             </span>
                           </div>
                           
-                          <div className="font-medium mt-1">Renter: {booking.renter?.name}</div>
+                          <div className="font-medium mt-1">Renter: {booking.renter?.name || "Unknown"}</div>
                         </div>
                         
                         <div className="mt-3 flex justify-between items-center">

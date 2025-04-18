@@ -54,7 +54,7 @@ export const useBookings = ({ filter, isOwner = false }: UseBookingsProps = {}) 
       // Update local state
       setBookings(prevBookings => 
         prevBookings.map(booking => 
-          booking.id === id ? { ...booking, status } : booking
+          booking.id === id ? { ...booking, status, updatedAt: new Date().toISOString() } : booking
         )
       );
       

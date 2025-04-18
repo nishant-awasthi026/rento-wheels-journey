@@ -145,7 +145,20 @@ export const bookingAPI = {
     });
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return fetchWithAuth(`/bookings${queryString}`, { method: 'GET' });
+    const bookings = await fetchWithAuth(`/bookings${queryString}`, { method: 'GET' });
+    
+    // Format bookings to include vehicle and renter objects
+    return bookings.map((booking: any) => ({
+      ...booking,
+      vehicle: booking.vehicle || { 
+        name: "Unknown Vehicle",
+        brand: "",
+        model: "",
+        location: "Unknown location" 
+      },
+      renter: booking.renter || null,
+      updatedAt: booking.updatedAt || null
+    }));
   },
   
   // Update booking status (accept/reject/cancel)

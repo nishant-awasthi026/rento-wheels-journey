@@ -1,3 +1,4 @@
+
 // User Types
 export interface User {
   id: string;
@@ -31,7 +32,7 @@ export interface Vehicle {
   specifications?: Record<string, string>;
   availability?: boolean;
   availableDates?: DateRange[];
-  createdAt?: string; // Adding the createdAt property as optional
+  createdAt?: string;
 }
 
 // Booking Types
@@ -46,6 +47,20 @@ export interface Booking {
   status: "pending" | "confirmed" | "cancelled" | "completed";
   paymentStatus: "pending" | "paid" | "refunded";
   createdAt: string;
+  updatedAt?: string;
+  vehicle?: {
+    name: string;
+    brand: string;
+    model: string;
+    category?: string;
+    location?: string;
+    image?: string;
+  };
+  renter?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
 }
 
 // Date Range Type

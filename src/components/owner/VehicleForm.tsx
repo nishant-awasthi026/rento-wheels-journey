@@ -92,7 +92,9 @@ const VehicleForm = ({ vehicleId, isEditing = false }: VehicleFormProps) => {
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'features' || key === 'specifications') {
           // Convert to JSON string for backend processing
-          vehicleFormData.append(key, JSON.stringify(value.split(',').map(item => item.trim())));
+          // Make sure value is a string before calling split
+          const strValue = String(value);
+          vehicleFormData.append(key, JSON.stringify(strValue.split(',').map(item => item.trim())));
         } else {
           vehicleFormData.append(key, String(value));
         }
