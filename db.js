@@ -1,5 +1,5 @@
 
-const mysql = require('mysql2/promise');
+import mysql from 'mysql2/promise';
 
 // Database configuration
 const dbConfig = {
@@ -38,4 +38,4 @@ const initDb = async () => {
 initDb();
 
 // Export the pool to be used in other files
-module.exports = pool;
+export { pool as db };

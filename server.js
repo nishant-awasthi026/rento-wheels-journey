@@ -1,12 +1,17 @@
-const express = require('express');
-const mysql = require('mysql2/promise');
-const cors = require('cors');
-const bcrypt = require('bcrypt');
-const { v4: uuidv4 } = require('uuid');
-const multer = require('multer');
-const path = require('path');
-const jwt = require('jsonwebtoken');
-const db = require('./db'); // Import database connection
+
+import express from 'express';
+import cors from 'cors';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
+import path from 'path';
+import jwt from 'jsonwebtoken';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { db } from './db.js'; // Updated import
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
