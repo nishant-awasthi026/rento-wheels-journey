@@ -34,6 +34,7 @@ export const useBookings = ({ filter, isOwner = false }: UseBookingsProps = {}) 
       setError(null);
       const userBookings = await bookingAPI.getUserBookings();
       setBookings(userBookings);
+      return userBookings;
     } catch (error) {
       console.error("Failed to fetch bookings:", error);
       setError("Failed to load bookings. Please try again.");
@@ -42,6 +43,7 @@ export const useBookings = ({ filter, isOwner = false }: UseBookingsProps = {}) 
         description: "Failed to load bookings. Please try again later.",
         variant: "destructive",
       });
+      return [];
     } finally {
       setLoading(false);
     }
@@ -69,6 +71,9 @@ export const useBookings = ({ filter, isOwner = false }: UseBookingsProps = {}) 
         title: "Success",
         description: statusMessages[status],
       });
+      
+      // Refresh bookings to ensure we have the latest data
+      fetchBookings();
       
       return true;
     } catch (error) {

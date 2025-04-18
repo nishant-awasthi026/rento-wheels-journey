@@ -15,10 +15,14 @@ interface BookingRequestCardProps {
 
 const BookingRequestCard = ({ booking, onAccept, onReject }: BookingRequestCardProps) => {
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(booking.status);
   
   const handleAccept = async () => {
     setLoading(true);
     const success = await onAccept(booking.id);
+    if (success) {
+      setStatus("confirmed");
+    }
     setLoading(false);
     return success;
   };
@@ -26,12 +30,30 @@ const BookingRequestCard = ({ booking, onAccept, onReject }: BookingRequestCardP
   const handleReject = async () => {
     setLoading(true);
     const success = await onReject(booking.id);
+    if (success) {
+      setStatus("cancelled");
+    }
     setLoading(false);
     return success;
   };
   
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'MMM d, yyyy');
+  };
+  
+  const getStatusBadge = () => {
+    switch (status) {
+      case "pending":
+        return <Badge className="bg-yellow-400 text-yellow-900">Pending</Badge>;
+      case "confirmed":
+        return <Badge className="bg-green-400 text-green-900">Confirmed</Badge>;
+      case "cancelled":
+        return <Badge className="bg-red-400 text-red-900">Cancelled</Badge>;
+      case "completed":
+        return <Badge className="bg-blue-400 text-blue-900">Completed</Badge>;
+      default:
+        return <Badge className="bg-yellow-400 text-yellow-900">Pending</Badge>;
+    }
   };
   
   return (
@@ -44,7 +66,7 @@ const BookingRequestCard = ({ booking, onAccept, onReject }: BookingRequestCardP
             className="w-full h-40 object-cover"
           />
           <div className="absolute top-2 right-2">
-            <Badge className="bg-yellow-400 text-yellow-900">Pending</Badge>
+            {getStatusBadge()}
           </div>
         </div>
         
@@ -93,26 +115,36 @@ const BookingRequestCard = ({ booking, onAccept, onReject }: BookingRequestCardP
               <div className="font-bold text-lg">₹{booking.totalAmount}</div>
             </div>
             
-            <div className="mt-4 flex space-x-2">
-              <Button 
-                onClick={handleAccept}
-                disabled={loading}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-              >
-                <Check className="mr-1 h-4 w-4" />
-                Accept
-              </Button>
-              
-              <Button 
-                onClick={handleReject}
-                disabled={loading}
-                variant="outline"
-                className="flex-1 border-red-500 text-red-500 hover:bg-red-50"
-              >
-                <X className="mr-1 h-4 w-4" />
-                Reject
-              </Button>
-            </div>
+            {status === "pending" && (
+              <div className="mt-4 flex space-x-2">
+                <Button 
+                  onClick={handleAccept}
+                  disabled={loading}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                >
+                  <Check className="mr-1 h-4 w-4" />
+                  Accept
+                </Button>
+                
+                <Button 
+                  onClick={handleReject}
+                  disabled={loading}
+                  variant="outline"
+                  className="flex-1 border-red-500 text-red-500 hover:bg-red-50"
+                >
+                  <X className="mr-1 h-4 w-4" />
+                  Reject
+                </Button>
+              </div>
+            )}
+            
+            {status !== "pending" && (
+              <div className="mt-4">
+                <div className="text-sm text-gray-500">
+                  Status updated on {formatDate(booking.updatedAt || new Date().toISOString())}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

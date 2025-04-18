@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -24,13 +24,22 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Booking } from "@/types";
 import { useBookings } from "@/hooks/useBookings";
+import PaymentProcessor from "@/components/payment/PaymentProcessor";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const MyBookings = () => {
   const { user } = useAuth();
-  const { allBookings: bookings, loading } = useBookings();
+  const { allBookings: bookings, loading, refreshBookings } = useBookings();
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    refreshBookings();
+  }, []);
 
   useEffect(() => {
     // Apply filters whenever dependencies change
@@ -63,6 +72,20 @@ const MyBookings = () => {
     setFilteredBookings(filtered);
   };
 
+  const handlePaymentStart = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setShowPaymentDialog(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentDialog(false);
+    refreshBookings();
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPaymentDialog(false);
+  };
+
   const getBookingStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
@@ -73,6 +96,19 @@ const MyBookings = () => {
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelled</Badge>;
       case "completed":
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Completed</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Badge variant="outline" className="border-yellow-300 text-yellow-800">Payment Pending</Badge>;
+      case "paid":
+        return <Badge variant="outline" className="border-green-300 text-green-800">Paid</Badge>;
+      case "refunded":
+        return <Badge variant="outline" className="border-blue-300 text-blue-800">Refunded</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -163,6 +199,19 @@ const MyBookings = () => {
               {renderBookingsList(filteredBookings.filter(b => b.status === "completed" || b.status === "cancelled"))}
             </TabsContent>
           </Tabs>
+
+          {/* Payment Dialog */}
+          <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+            <DialogContent className="sm:max-w-lg p-0">
+              {selectedBooking && (
+                <PaymentProcessor 
+                  booking={selectedBooking} 
+                  onSuccess={handlePaymentSuccess}
+                  onCancel={handlePaymentCancel}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </main>
       
@@ -196,6 +245,9 @@ const MyBookings = () => {
       <div className="space-y-4">
         {bookings.map(booking => {
           const vehicle = booking.vehicle;
+          const isPending = booking.status === "pending";
+          const needsPayment = booking.paymentStatus === "pending" && (isPending || booking.status === "confirmed");
+          
           return (
             <div 
               key={booking.id} 
@@ -217,7 +269,10 @@ const MyBookings = () => {
                       {vehicle?.brand || ""} {vehicle?.model || ""} • {vehicle?.category || ""}
                     </p>
                   </div>
-                  {getBookingStatusBadge(booking.status)}
+                  <div className="flex flex-col gap-2 items-end">
+                    {getBookingStatusBadge(booking.status)}
+                    {getPaymentStatusBadge(booking.paymentStatus)}
+                  </div>
                 </div>
                 
                 <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -242,11 +297,23 @@ const MyBookings = () => {
                         Leave Review
                       </Button>
                     )}
+                    
+                    {needsPayment && (
+                      <Button 
+                        size="sm"
+                        onClick={() => handlePaymentStart(booking)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Complete Payment
+                      </Button>
+                    )}
+                    
                     <Link to={`/vehicle/${booking.vehicleId}`}>
                       <Button variant="outline" size="sm">
                         View Vehicle
                       </Button>
                     </Link>
+                    
                     <Button 
                       size="sm" 
                       className="bg-rento-yellow hover:bg-rento-gold text-rento-dark"

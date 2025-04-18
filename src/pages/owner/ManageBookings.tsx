@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,12 @@ const ManageBookings = () => {
   } = useBookings({ isOwner: true });
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("pending");
+  
+  // Force refresh when tab changes
+  useEffect(() => {
+    refreshBookings();
+  }, [activeTab]);
   
   const pendingBookings = allBookings.filter(booking => booking.status === "pending");
   const confirmedBookings = allBookings.filter(booking => booking.status === "confirmed");
@@ -43,7 +49,8 @@ const ManageBookings = () => {
   const handleAccept = async (id: string) => {
     const success = await updateBookingStatus(id, "confirmed");
     if (success) {
-      refreshBookings();
+      await refreshBookings();
+      setActiveTab("confirmed");
     }
     return success;
   };
@@ -51,7 +58,7 @@ const ManageBookings = () => {
   const handleReject = async (id: string) => {
     const success = await updateBookingStatus(id, "cancelled");
     if (success) {
-      refreshBookings();
+      await refreshBookings();
     }
     return success;
   };
@@ -59,7 +66,8 @@ const ManageBookings = () => {
   const handleComplete = async (id: string) => {
     const success = await updateBookingStatus(id, "completed");
     if (success) {
-      refreshBookings();
+      await refreshBookings();
+      setActiveTab("completed");
     }
     return success;
   };
@@ -88,7 +96,7 @@ const ManageBookings = () => {
             </div>
           </div>
           
-          <Tabs defaultValue="pending" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-6">
               <TabsTrigger value="pending" className="flex items-center">
                 <Clock className="mr-2 h-4 w-4" />

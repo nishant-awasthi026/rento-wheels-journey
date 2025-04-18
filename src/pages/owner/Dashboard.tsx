@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -21,12 +21,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { mockVehicles, mockBookings } from "@/data/mockData";
 import { Vehicle, Booking } from "@/types";
+import { useBookings } from "@/hooks/useBookings";
+import { useToast } from "@/hooks/use-toast";
 
 const OwnerDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { allBookings: bookings, loading, updateBookingStatus, refreshBookings } = useBookings({ isOwner: true });
+  const { toast } = useToast();
+  
   const [stats, setStats] = useState({
     totalEarnings: 0,
     activeBookings: 0,
@@ -42,39 +46,77 @@ const OwnerDashboard = () => {
         const userVehicles = mockVehicles.filter(v => v.ownerId === "o1"); // Using o1 for demo
         setVehicles(userVehicles);
         
-        // Get bookings for these vehicles
-        const userBookings = mockBookings.filter(b => b.ownerId === "o1"); // Using o1 for demo
-        setBookings(userBookings);
-        
-        // Calculate stats
-        const totalEarnings = userBookings
-          .filter(b => b.status === "completed" || b.status === "confirmed")
-          .reduce((sum, booking) => sum + booking.totalAmount, 0);
-          
-        const activeBookings = userBookings
-          .filter(b => b.status === "confirmed")
-          .length;
-          
-        const pendingRequests = userBookings
-          .filter(b => b.status === "pending")
-          .length;
-          
-        const ratings = userVehicles.map(v => v.rating);
-        const averageRating = ratings.length 
-          ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
-          : 0;
-          
-        setStats({
-          totalEarnings,
-          activeBookings,
-          pendingRequests,
-          averageRating,
-        });
+        // Calculate stats based on actual bookings
+        calculateStats(userVehicles, bookings);
       }
-      
-      setLoading(false);
     }, 1000);
-  }, [user]);
+  }, [user, bookings]);
+
+  const calculateStats = (vehicles: Vehicle[], bookings: Booking[]) => {
+    const totalEarnings = bookings
+      .filter(b => b.status === "completed" || b.status === "confirmed")
+      .reduce((sum, booking) => sum + booking.totalAmount, 0);
+      
+    const activeBookings = bookings
+      .filter(b => b.status === "confirmed")
+      .length;
+      
+    const pendingRequests = bookings
+      .filter(b => b.status === "pending")
+      .length;
+      
+    const ratings = vehicles.map(v => v.rating);
+    const averageRating = ratings.length 
+      ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
+      : 0;
+      
+    setStats({
+      totalEarnings,
+      activeBookings,
+      pendingRequests,
+      averageRating,
+    });
+  };
+
+  const handleAcceptBooking = async (id: string) => {
+    try {
+      const success = await updateBookingStatus(id, "confirmed");
+      if (success) {
+        toast({
+          title: "Booking Accepted",
+          description: "The booking has been accepted successfully."
+        });
+        refreshBookings();
+      }
+    } catch (error) {
+      console.error("Failed to accept booking:", error);
+      toast({
+        title: "Error",
+        description: "Failed to accept booking. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeclineBooking = async (id: string) => {
+    try {
+      const success = await updateBookingStatus(id, "cancelled");
+      if (success) {
+        toast({
+          title: "Booking Declined",
+          description: "The booking has been declined successfully."
+        });
+        refreshBookings();
+      }
+    } catch (error) {
+      console.error("Failed to decline booking:", error);
+      toast({
+        title: "Error",
+        description: "Failed to decline booking. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const getBookingStatus = (status: string) => {
     switch (status) {
@@ -209,8 +251,9 @@ const OwnerDashboard = () => {
                     <div className="space-y-4">
                       {bookings
                         .filter(b => b.status === "pending")
+                        .slice(0, 3) // Show only the first 3
                         .map(booking => {
-                          const vehicle = vehicles.find(v => v.id === booking.vehicleId);
+                          const vehicle = booking.vehicle;
                           return (
                             <div key={booking.id} className="flex justify-between items-start border-b border-gray-100 pb-4">
                               <div className="flex">
@@ -230,11 +273,21 @@ const OwnerDashboard = () => {
                                 </div>
                               </div>
                               <div className="flex space-x-2">
-                                <Button size="sm" variant="outline" className="border-green-500 text-green-600 hover:bg-green-50">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="border-green-500 text-green-600 hover:bg-green-50"
+                                  onClick={() => handleAcceptBooking(booking.id)}
+                                >
                                   <Check size={16} className="mr-1" />
                                   Accept
                                 </Button>
-                                <Button size="sm" variant="outline" className="border-red-500 text-red-600 hover:bg-red-50">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="border-red-500 text-red-600 hover:bg-red-50"
+                                  onClick={() => handleDeclineBooking(booking.id)}
+                                >
                                   <X size={16} className="mr-1" />
                                   Decline
                                 </Button>
@@ -243,6 +296,15 @@ const OwnerDashboard = () => {
                           );
                         })
                       }
+                      {bookings.filter(b => b.status === "pending").length > 3 && (
+                        <div className="text-center pt-2">
+                          <Link to="/owner/bookings">
+                            <Button variant="link" size="sm" className="text-gray-500">
+                              View all {bookings.filter(b => b.status === "pending").length} pending requests
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -270,8 +332,9 @@ const OwnerDashboard = () => {
                     <div className="space-y-4">
                       {bookings
                         .filter(b => b.status === "confirmed")
+                        .slice(0, 3) // Show only the first 3
                         .map(booking => {
-                          const vehicle = vehicles.find(v => v.id === booking.vehicleId);
+                          const vehicle = booking.vehicle;
                           return (
                             <div key={booking.id} className="flex justify-between items-start border-b border-gray-100 pb-4">
                               <div className="flex">
@@ -298,9 +361,10 @@ const OwnerDashboard = () => {
                                 size="sm" 
                                 variant="outline"
                                 className="whitespace-nowrap"
+                                onClick={() => navigate(`/owner/bookings`)}
                               >
                                 <MessageSquare size={16} className="mr-1" />
-                                Contact Renter
+                                View Details
                               </Button>
                             </div>
                           );
@@ -385,14 +449,18 @@ const OwnerDashboard = () => {
                   <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start">
-                    <CalendarDays size={16} className="mr-2" />
-                    Manage Availability
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start">
-                    <DollarSign size={16} className="mr-2" />
-                    Update Pricing
-                  </Button>
+                  <Link to="/owner/vehicles">
+                    <Button variant="outline" className="w-full justify-start">
+                      <CalendarDays size={16} className="mr-2" />
+                      Manage Vehicles
+                    </Button>
+                  </Link>
+                  <Link to="/owner/bookings">
+                    <Button variant="outline" className="w-full justify-start">
+                      <DollarSign size={16} className="mr-2" />
+                      Manage Bookings
+                    </Button>
+                  </Link>
                   <Button variant="outline" className="w-full justify-start">
                     <MessageSquare size={16} className="mr-2" />
                     Messages

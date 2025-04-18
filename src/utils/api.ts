@@ -25,6 +25,7 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     // Handle non-2xx responses
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error(`API error (${response.status}): ${errorData.error || response.statusText}`);
       throw new Error(errorData.error || `API error: ${response.status}`);
     }
 
@@ -131,10 +132,17 @@ export const bookingAPI = {
     startDate: string;
     endDate: string;
   }) => {
-    return fetchWithAuth('/bookings', {
-      method: 'POST',
-      body: JSON.stringify(bookingData)
-    });
+    try {
+      const response = await fetchWithAuth('/bookings', {
+        method: 'POST',
+        body: JSON.stringify(bookingData)
+      });
+      console.log("Booking created successfully:", response);
+      return response;
+    } catch (error) {
+      console.error("Failed to create booking:", error);
+      throw error;
+    }
   },
   
   // Get user's bookings (both owner and renter)
@@ -145,28 +153,47 @@ export const bookingAPI = {
     });
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const bookings = await fetchWithAuth(`/bookings${queryString}`, { method: 'GET' });
     
-    // Format bookings to include vehicle and renter objects
-    return bookings.map((booking: any) => ({
-      ...booking,
-      vehicle: booking.vehicle || { 
-        name: "Unknown Vehicle",
-        brand: "",
-        model: "",
-        location: "Unknown location" 
-      },
-      renter: booking.renter || null,
-      updatedAt: booking.updatedAt || null
-    }));
+    try {
+      const bookings = await fetchWithAuth(`/bookings${queryString}`, { method: 'GET' });
+      
+      // Format bookings to include vehicle and renter objects
+      console.log("Raw bookings data:", bookings);
+      
+      return bookings.map((booking: any) => ({
+        ...booking,
+        vehicle: booking.vehicle || { 
+          name: "Unknown Vehicle",
+          brand: "",
+          model: "",
+          location: "Unknown location",
+          image: "/placeholder.svg"
+        },
+        renter: booking.renter || { 
+          name: "Unknown Renter",
+          email: "unknown@example.com"
+        },
+        updatedAt: booking.updatedAt || null
+      }));
+    } catch (error) {
+      console.error("Failed to fetch bookings:", error);
+      throw error;
+    }
   },
   
   // Update booking status (accept/reject/cancel)
   updateBookingStatus: async (id: string, status: 'confirmed' | 'cancelled' | 'completed') => {
-    return fetchWithAuth(`/bookings/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status })
-    });
+    try {
+      const response = await fetchWithAuth(`/bookings/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+      console.log(`Booking ${id} status updated to ${status}:`, response);
+      return response;
+    } catch (error) {
+      console.error(`Failed to update booking status for ${id}:`, error);
+      throw error;
+    }
   }
 };
 
@@ -253,15 +280,29 @@ export const paymentAPI = {
     method: 'upi' | 'cash';
     amount: number;
   }) => {
-    return fetchWithAuth('/payments', {
-      method: 'POST',
-      body: JSON.stringify(paymentData)
-    });
+    try {
+      const response = await fetchWithAuth('/payments', {
+        method: 'POST',
+        body: JSON.stringify(paymentData)
+      });
+      console.log("Payment processed successfully:", response);
+      return response;
+    } catch (error) {
+      console.error("Failed to process payment:", error);
+      throw error;
+    }
   },
   
   // Get payment status
   getPaymentStatus: async (bookingId: string) => {
-    return fetchWithAuth(`/payments/status/${bookingId}`, { method: 'GET' });
+    try {
+      const response = await fetchWithAuth(`/payments/status/${bookingId}`, { method: 'GET' });
+      console.log(`Payment status for booking ${bookingId}:`, response);
+      return response;
+    } catch (error) {
+      console.error(`Failed to get payment status for booking ${bookingId}:`, error);
+      throw error;
+    }
   },
   
   // Generate UPI payment link
@@ -270,14 +311,28 @@ export const paymentAPI = {
     amount: number;
     description: string;
   }) => {
-    return fetchWithAuth('/payments/upi/generate', {
-      method: 'POST',
-      body: JSON.stringify(paymentData)
-    });
+    try {
+      const response = await fetchWithAuth('/payments/upi/generate', {
+        method: 'POST',
+        body: JSON.stringify(paymentData)
+      });
+      console.log("UPI payment link generated:", response);
+      return response;
+    } catch (error) {
+      console.error("Failed to generate UPI payment link:", error);
+      throw error;
+    }
   },
   
   // Verify UPI payment
   verifyUpiPayment: async (paymentId: string) => {
-    return fetchWithAuth(`/payments/upi/verify/${paymentId}`, { method: 'GET' });
+    try {
+      const response = await fetchWithAuth(`/payments/upi/verify/${paymentId}`, { method: 'GET' });
+      console.log(`UPI payment ${paymentId} verification:`, response);
+      return response;
+    } catch (error) {
+      console.error(`Failed to verify UPI payment ${paymentId}:`, error);
+      throw error;
+    }
   }
 };
